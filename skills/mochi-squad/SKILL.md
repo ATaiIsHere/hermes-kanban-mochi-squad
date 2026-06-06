@@ -1,0 +1,175 @@
+---
+name: mochi-squad
+description: Use when modeling project-oriented multi-agent workflows on top of Hermes Kanban without changing the native Kanban schema; covers Project derivation, orchestrator routing, blocked recovery, readiness boundaries, and future Virtual Office constraints.
+version: 0.1.0
+author: Mochi Squad contributors
+license: MIT
+metadata:
+  hermes:
+    tags: [kanban, multi-agent, orchestration, workflow, review, recovery]
+    related_skills: [kanban-worker]
+---
+
+# Mochi Squad
+
+## Overview
+
+Mochi Squad is a skill-only convention layer for Hermes Kanban. It explains how to organize native Kanban tasks into durable project workflows, how an orchestrator should route plan/exec/review work, and how to continue safely when execution or review is blocked.
+
+Version `0.1.0` is documentation-only. It does not run a daemon, expose a server, install a Virtual Office, modify Hermes Kanban schema, or require custom task columns.
+
+## When to Use
+
+Use this skill when:
+
+- turning a request into a durable Hermes Kanban task graph;
+- explaining or implementing `Project = root task + descendants`;
+- deriving project lanes from native task states and task links;
+- designing plan -> exec -> review workflows;
+- deciding whether to rerun a blocked task or branch through resolve-block;
+- documenting setup/readiness boundaries for a local Mochi Squad runtime;
+- preparing for a future Virtual Office without committing to API shapes yet.
+
+Do not use this skill to bypass Hermes Kanban, mutate its database schema, install services implicitly, or treat a failed review as done.
+
+## Core Principles
+
+1. Mochi Squad is a convention layer over native Hermes Kanban.
+2. A Project is the root task plus every descendant reachable through native task links.
+3. The root task is the specification source of truth.
+4. Child tasks reference root scenarios instead of duplicating the full spec.
+5. Review verifies scenarios and records evidence; it should not become implementation work.
+6. Blocked or failed work remains visible as blocked history.
+7. Local runtime state belongs outside reusable skill files.
+8. Virtual Office API and response shape are deferred until UI decisions are made.
+
+## Project State Derivation
+
+Virtual Office or reporting tools may show four project lanes:
+
+```text
+PLANNING | IN_PROGRESS | BLOCKED | DONE
+```
+
+Derive them from native Kanban state:
+
+```text
+if root.status == triage:
+  Project = PLANNING
+elif graph contains an unresolved blocked task:
+  Project = BLOCKED
+elif all leaf tasks are done or archived:
+  Project = DONE
+else:
+  Project = IN_PROGRESS
+```
+
+Definitions:
+
+- `root task`: the planning/spec anchor for the project.
+- `descendant`: any task reachable from the root through native parent/child task links.
+- `leaf task`: a descendant with no children.
+- `unresolved blocked task`: a blocked task without a completed resolve-block or resolve-review-block continuation path.
+
+Do not add Mochi-only database fields to compute this. Read native task status, task links, comments, events, run summaries, and run metadata.
+
+## Orchestrator Workflow
+
+The orchestrator should keep the root task as the durable work contract. A good root task includes:
+
+- goal;
+- scope and non-goals;
+- user stories;
+- scenarios or acceptance criteria;
+- verification strategy;
+- planned task graph;
+- handoff requirements;
+- block policy.
+
+A simple linear graph:
+
+```text
+root/spec
+  -> exec
+  -> review
+```
+
+A larger graph may fan out research or spikes, then fan in to synthesis, implementation, and review. Children should stay focused on their role and reference the root task plus scenario IDs.
+
+## Blocked Recovery
+
+Before routing recovery, inspect the blocked task body, parent handoff, comments, run summary, run metadata, block reason, and graph position.
+
+Rerun the original task only when it is still the correct work item:
+
+- goal, scope, acceptance criteria, and target scenarios are unchanged;
+- the same assignee should continue the same work;
+- no new dependency branch is needed;
+- missing context can be added as a comment or small supplement.
+
+Branch through a resolve task when the original blocked task should remain blocked as historical evidence:
+
+```text
+blocked task remains blocked
+  -> resolve-block task records the decision
+  -> next execution/review path continues
+```
+
+For failed review, use:
+
+```text
+blocked review remains blocked
+  -> resolve-review-block task records failed scenarios
+  -> fix exec task
+  -> re-review task
+```
+
+Never mark failed execution or failed review as done merely to release downstream dependencies.
+
+## Setup and Readiness Boundary
+
+The skill package and the local runtime are separate:
+
+```text
+skill package = reusable docs, templates, schemas, scripts
+runtime install = local config, state, profiles, watchers, services
+```
+
+Loading this skill should provide workflow knowledge. It should not silently install, repair, restart, or modify the host.
+
+See `references/setup-readiness.md` for the recommended runtime directory, readiness states, and explicit setup command boundaries.
+
+## Virtual Office Boundary
+
+Virtual Office is a future extension. v0.1 only defines the derivation contract: project state and details must be recoverable from the native Kanban graph and handoff records.
+
+Do not define committed API routes, response shapes, or server behavior in v0.1. Those should be designed when the UI and product needs are known.
+
+## GitHub App Access
+
+For repository-scoped automation, prefer a GitHub App installation with selected repository access, such as an app named `mochi-squad`, over broad personal PATs. Use the minimum required permissions and never commit private keys, installation tokens, personal tokens, local runtime state, or notification targets.
+
+## References
+
+- `references/orchestrator-guideline.md` — project graph, orchestration, and recovery conventions.
+- `references/setup-readiness.md` — package/runtime separation and readiness model.
+
+## Common Pitfalls
+
+1. Treating Project as a new Kanban database table. It is not; it is derived from the native task graph.
+2. Copying the full root spec into every child task. Reference root scenarios instead.
+3. Marking blocked or failed work done to keep the graph moving. Preserve history with resolve-block or resolve-review-block.
+4. Installing services just because the skill was loaded. Runtime installation must be explicit.
+5. Defining Virtual Office API shape too early. v0.1 deliberately defers it.
+6. Using broad personal PATs where a selected-repository GitHub App installation would be safer.
+
+## Verification Checklist
+
+- [ ] Root task is the project anchor.
+- [ ] Project lanes can be derived without schema changes.
+- [ ] Root task carries scope, non-goals, stories, scenarios, verification, and block policy.
+- [ ] Child tasks reference root scenarios and stay role-focused.
+- [ ] Blocked recovery uses rerun only when the original task remains correct.
+- [ ] Failed review continues through resolve-review-block, fix, and re-review.
+- [ ] Skill docs do not commit local runtime state, secrets, or host-specific paths.
+- [ ] Virtual Office is described as future work with API/response shape deferred.
