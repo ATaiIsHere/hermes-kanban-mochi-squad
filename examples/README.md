@@ -12,8 +12,8 @@ The examples intentionally use only native Kanban concepts: task body, task stat
 
 Examples:
 
-- `basic-linear.md` — root/spec -> exec -> review.
-- `review-fix-rereview.md` — failed review stays blocked, then resolve-review-block -> fix -> re-review.
-- `resolve-block.md` — blocked execution stays blocked, then resolve-block -> replacement execution -> review.
+- `basic-linear-workflow.md` — root/spec -> exec -> review.
+- `review-fix-re-review.md` — failed review stays blocked, then resolve-review-block -> fix -> re-review.
+- `resolve-block-flow.md` — blocked execution stays blocked, then resolve-block -> replacement execution -> review.
 
 Use these files as copyable patterns when writing README sections, skill references, or task bodies.

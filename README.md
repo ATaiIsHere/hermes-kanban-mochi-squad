@@ -105,6 +105,18 @@ skills/
     references/
       orchestrator-guideline.md
       setup-readiness.md
+    templates/
+      mochi-squad.config.yaml
+    scripts/
+      check_readiness.py
+      setup.py
+examples/
+  basic-linear-workflow.md
+  review-fix-re-review.md
+  resolve-block-flow.md
+tests/
+  test_readiness.py
+  test_config_parse.py
 ```
 
 Future versions may add templates, readiness scripts, tests, and examples while keeping the core rule intact: Mochi Squad is a convention layer over native Hermes Kanban, not a schema fork.

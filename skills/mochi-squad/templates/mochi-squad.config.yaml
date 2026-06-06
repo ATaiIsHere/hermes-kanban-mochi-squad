@@ -1,0 +1,25 @@
+# Mochi Squad — default local runtime config
+#
+# Copy this template to ${HERMES_HOME}/mochi/mochi-squad/config.yaml
+# and edit for your local deployment.
+#
+# v0.1 — not a committed API contract; shape may change.
+
+profiles:
+  # Names of Hermes profiles used by this Mochi Squad deployment.
+  # These must already exist in the local Hermes profile directory.
+  plan: mochi-plan
+  exec: mochi-exec
+  review: mochi-review
+  research: mochi-research
+
+watchers:
+  # Optional: periodic Kanban watcher (disabled by default in v0.1).
+  blocked:
+    enabled: false
+    schedule: "every 5m"
+    notify_target: origin
+
+virtual_office:
+  # Virtual Office is deferred in v0.1.
+  enabled: false
