@@ -12,7 +12,8 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 - Project convention: root task plus descendants, with state derived from the native task graph.
 - Orchestrator guidance for planning, execution, review, and recovery task chains.
 - Setup/readiness guidance that separates reusable skill documentation from local runtime config and state.
-- Blocked recovery guidance using resolve-block and resolve-review-block bridge tasks.
+- Blocked recovery guidance using exec rerun/resume-context and review fix insertion before the same review gate.
+- Guard-safe PR handoff policy for retryable Kanban comments.
 
 ### Deferred
 

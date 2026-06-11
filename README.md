@@ -10,7 +10,7 @@ Version `0.1.0` is intentionally small: it ships reusable skill documentation an
 - Orchestrator guidance for turning a request into a native Kanban task graph.
 - Setup/readiness guidance for separating reusable skill content from local runtime state.
 - A Project convention derived from existing Kanban task links.
-- Blocked and failed-review recovery patterns that preserve history instead of marking failed work done.
+- Blocked recovery patterns for exec rerun and review fix insertion without marking failed work done.
 
 ## Non-goals
 
@@ -37,7 +37,7 @@ Project state is derived from the native task graph:
 ```text
 if root.status == triage:
   Project = PLANNING
-elif graph contains an unresolved blocked task:
+elif graph contains a blocked task that still needs orchestrator/user/external intervention:
   Project = BLOCKED
 elif all leaf tasks are done or archived:
   Project = DONE
@@ -45,7 +45,7 @@ else:
   Project = IN_PROGRESS
 ```
 
-An unresolved blocked task is a blocked task that does not yet have a completed resolve-block path that lets work continue. Project details can show the task chain, assignees, run summaries, review results, artifacts, and blocked reasons, but those details come from native task fields, comments, events, and handoffs.
+An unresolved blocked task is a task still in `blocked` after Mochi triage, usually waiting on orchestrator, user, environment, credentials, or unsafe-operation approval. Normal review `needs_fix` blocks should be converted into fix insertion and unblocked. Project details can show the task chain, assignees, run summaries, review results, artifacts, blocked reasons, rerun/resume comments, and fix-insertion history from native task fields, comments, events, and handoffs.
 
 ## Standard workflow
 
@@ -61,26 +61,27 @@ The root task should carry the durable contract: goal, scope, non-goals, user st
 
 ## Blocked recovery
 
-Do not mark blocked or failed work as done just to unblock downstream tasks. Preserve the historical fact and continue through a resolution bridge.
+Do not mark blocked or failed work as done just to unblock downstream tasks. Use the original task whenever it is still the right executable unit.
 
 For an execution block:
 
 ```text
-blocked exec task remains blocked
-  -> resolve-block task records the decision/resolution
-  -> replacement exec/review path continues from there
+exec block -> add resume-context -> unblock same exec -> rerun
 ```
+
+Reruns are not necessarily from scratch. The blocked exec should record completed work, remaining work, attempted fixes, artifacts or changed files, `do_not_repeat`, and a resume hint.
 
 For a failed review:
 
 ```text
-blocked review task remains blocked
-  -> resolve-review-block task records failed scenarios
-  -> fix exec task
-  -> re-review task
+root -> exec -> review(blocked: needs_fix)
+root -> exec -> fix -> review(unblocked, waiting on fix)
+fix done -> review auto-promotes/reruns
 ```
 
-Use a simple supplement-and-rerun only when the original task is still the correct work item and the missing context does not change scope, acceptance criteria, product behavior, credentials, or user-facing decisions.
+The review task is the gate. Mochi inserts a scoped fix task before the same review task, links `fix -> review`, then unblocks review. Native dependency promotion reruns review when the fix completes.
+
+See `skills/mochi-squad/references/block-rerun-and-fix-insertion.md`.
 
 ## Virtual Office boundary
 
@@ -104,6 +105,8 @@ skills/
     SKILL.md
     references/
       orchestrator-guideline.md
+      block-rerun-and-fix-insertion.md
+      pr-handoff-guard-policy.md
       setup-readiness.md
     templates/
       mochi-squad.config.yaml
@@ -113,7 +116,7 @@ skills/
 examples/
   basic-linear-workflow.md
   review-fix-re-review.md
-  resolve-block-flow.md
+  block-rerun-and-fix-insertion.md
 tests/
   test_readiness.py
   test_config_parse.py

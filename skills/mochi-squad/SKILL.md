@@ -26,7 +26,7 @@ Use this skill when:
 - explaining or implementing `Project = root task + descendants`;
 - deriving project lanes from native task states and task links;
 - designing plan -> exec -> review workflows;
-- deciding whether to rerun a blocked task or branch through resolve-block;
+- deciding whether a blocked exec should rerun in place or a blocked review should receive a fix insertion;
 - documenting setup/readiness boundaries for a local Mochi Squad runtime;
 - preparing for a future Virtual Office without committing to API shapes yet.
 
@@ -39,7 +39,7 @@ Do not use this skill to bypass Hermes Kanban, mutate its database schema, insta
 3. The root task is the specification source of truth.
 4. Child tasks reference root scenarios instead of duplicating the full spec.
 5. Review verifies scenarios and records evidence; it should not become implementation work.
-6. Blocked or failed work remains visible as blocked history.
+6. Blocked tasks are triaged by Mochi first; ordinary review `needs_fix` is resolved by fix insertion, not by permanently preserving a blocked review.
 7. Local runtime state belongs outside reusable skill files.
 8. Virtual Office API and response shape are deferred until UI decisions are made.
 
@@ -56,7 +56,7 @@ Derive them from native Kanban state:
 ```text
 if root.status == triage:
   Project = PLANNING
-elif graph contains an unresolved blocked task:
+elif graph contains a blocked task that still needs orchestrator/user/external intervention:
   Project = BLOCKED
 elif all leaf tasks are done or archived:
   Project = DONE
@@ -69,7 +69,7 @@ Definitions:
 - `root task`: the planning/spec anchor for the project.
 - `descendant`: any task reachable from the root through native parent/child task links.
 - `leaf task`: a descendant with no children.
-- `unresolved blocked task`: a blocked task without a completed resolve-block or resolve-review-block continuation path.
+- `unresolved blocked task`: a task still in `blocked` after Mochi triage, usually waiting on orchestrator, user, environment, credentials, or unsafe-operation approval. Normal review `needs_fix` blocks should be converted into fix insertion and unblocked.
 
 Do not add Mochi-only database fields to compute this. Read native task status, task links, comments, events, run summaries, and run metadata.
 
@@ -98,33 +98,31 @@ A larger graph may fan out research or spikes, then fan in to synthesis, impleme
 
 ## Blocked Recovery
 
-Before routing recovery, inspect the blocked task body, parent handoff, comments, run summary, run metadata, block reason, and graph position.
+Before routing recovery, inspect the blocked task body, parent handoff, comments, run summary, run metadata, typed block reason, and graph position.
 
-Rerun the original task only when it is still the correct work item:
-
-- goal, scope, acceptance criteria, and target scenarios are unchanged;
-- the same assignee should continue the same work;
-- no new dependency branch is needed;
-- missing context can be added as a comment or small supplement.
-
-Branch through a resolve task when the original blocked task should remain blocked as historical evidence:
+Do **not** create resolve-block tasks for the normal Mochi workflow. A blocked task should usually be resolved in place:
 
 ```text
-blocked task remains blocked
-  -> resolve-block task records the decision
-  -> next execution/review path continues
+exec block   -> add resume-context -> unblock same exec -> rerun
+review block -> insert fix before review -> unblock same review -> fix done reruns review
 ```
 
-For failed review, use:
+Exec blocks usually mean the worker needs more context, environment recovery, narrower instructions, or an orchestrator/user decision. Keep the original exec task as the executable unit when the goal/scope/scenarios are still correct. Add a structured `[resume-context]` comment and unblock the same exec task so the rerun can continue from recorded progress instead of starting from scratch.
+
+For failed review, use Review-Blocked Fix Insertion. The review task is the gate:
 
 ```text
-blocked review remains blocked
-  -> resolve-review-block task records failed scenarios
-  -> fix exec task
-  -> re-review task
+root -> exec -> review
+root -> exec -> review(blocked: needs_fix)
+root -> exec -> fix -> review(unblocked, waiting on fix)
+fix done -> review auto-promotes/reruns
 ```
 
-Never mark failed execution or failed review as done merely to release downstream dependencies.
+Both `fix -> review` and `unblock review` are required. Only creating the fix task does not rerun review; only unblocking review without the new dependency may rerun too early.
+
+Never mark failed execution or failed review as done merely to release downstream dependencies. If the original task is no longer the correct work item, stop and replan with an explicit root-spec update or replacement branch.
+
+See `references/block-rerun-and-fix-insertion.md` for typed block reasons, comment shapes, and multi-round fix rules.
 
 ## Setup and Readiness Boundary
 
@@ -151,14 +149,16 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 
 ## References
 
-- `references/orchestrator-guideline.md` — project graph, orchestration, and recovery conventions.
+- `references/orchestrator-guideline.md` — project graph, orchestration, exec rerun, and review fix-insertion conventions.
+- `references/block-rerun-and-fix-insertion.md` — typed block reasons, exec rerun comments, and review fix insertion.
+- `references/pr-handoff-guard-policy.md` — guard-safe PR handoff format for retryable Kanban comments.
 - `references/setup-readiness.md` — package/runtime separation and readiness model.
 
 ## Common Pitfalls
 
 1. Treating Project as a new Kanban database table. It is not; it is derived from the native task graph.
 2. Copying the full root spec into every child task. Reference root scenarios instead.
-3. Marking blocked or failed work done to keep the graph moving. Preserve history with resolve-block or resolve-review-block.
+3. Marking blocked or failed work done to keep the graph moving. Use exec rerun or review fix insertion instead; preserve history in comments/runs.
 4. Installing services just because the skill was loaded. Runtime installation must be explicit.
 5. Defining Virtual Office API shape too early. v0.1 deliberately defers it.
 6. Using broad personal PATs where a selected-repository GitHub App installation would be safer.
@@ -170,6 +170,6 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 - [ ] Root task carries scope, non-goals, stories, scenarios, verification, and block policy.
 - [ ] Child tasks reference root scenarios and stay role-focused.
 - [ ] Blocked recovery uses rerun only when the original task remains correct.
-- [ ] Failed review continues through resolve-review-block, fix, and re-review.
+- [ ] Failed review uses fix insertion before the same review gate and scopes fixes to failed scenarios.
 - [ ] Skill docs do not commit local runtime state, secrets, or host-specific paths.
 - [ ] Virtual Office is described as future work with API/response shape deferred.

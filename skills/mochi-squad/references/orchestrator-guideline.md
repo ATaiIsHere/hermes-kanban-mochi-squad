@@ -27,7 +27,7 @@ Derived status:
 ```text
 if root.status == triage:
   Project = PLANNING
-elif graph contains an unresolved blocked task:
+elif graph contains a blocked task that still needs orchestrator/user/external intervention:
   Project = BLOCKED
 elif all leaf tasks are done or archived:
   Project = DONE
@@ -35,9 +35,9 @@ else:
   Project = IN_PROGRESS
 ```
 
-`unresolved blocked task` means a blocked task without a completed resolve-block or resolve-review-block continuation path.
+`unresolved blocked task` means a task still in `blocked` after Mochi triage, usually waiting on orchestrator, user, environment, credentials, or unsafe-operation approval. Normal review `needs_fix` blocks should be converted into fix insertion and unblocked.
 
-The main lane should stay simple. A project detail view can show native task statuses, current assignees, run summaries, review results, artifacts, blocked reasons, and the recovery path.
+The main lane should stay simple. A project detail view can show native task statuses, current assignees, run summaries, review results, artifacts, typed blocked reasons, rerun/resume comments, and fix-insertion history.
 
 ## Root Task Contract
 
@@ -84,64 +84,72 @@ Before deciding a recovery path, inspect:
 - parent handoff;
 - comment thread;
 - run summary and metadata;
-- blocked event reason;
-- task position in the project graph.
+- typed blocked event reason;
+- task position in the project graph;
+- workspace evidence when relevant.
 
-If the available evidence does not determine the correct action, stop and ask for the missing decision through the normal human-in-the-loop path. Do not invent scope, acceptance criteria, credentials, permissions, or user-facing behavior.
+If the available evidence does not determine the correct action, stop and ask for the missing decision through the normal human-in-the-loop path. Do not invent scope, acceptance criteria, credentials, permissions, risk, cost, or user-facing behavior.
 
-## Rerun Original Task
+## No Resolve-Block by Default
 
-Rerun the original blocked task when it remains the correct work item:
+Do not create resolve-block tasks for the normal Mochi workflow. A blocked task should usually be resolved in place:
+
+```text
+exec block   -> add resume-context -> unblock same exec -> rerun
+review block -> insert fix before review -> unblock same review -> fix done reruns review
+```
+
+Historical detail belongs in comments and run records. Task links should express the current executable dependency path.
+
+## Exec Block Rerun
+
+Rerun the original blocked exec task when it remains the correct work item:
 
 - goal, scope, acceptance criteria, and target scenarios are unchanged;
 - the same assignee should perform the same work;
-- no new dependency branch is needed;
-- missing context fits as a comment or small supplement;
+- missing context fits as a comment, small supplement, or root spec update;
 - existing downstream tasks remain valid.
 
 Flow:
 
 ```text
-blocked task
-  -> supplement with missing context
-  -> unblock/rerun original task
-  -> original task completes
+blocked exec
+  -> orchestrator adds [resume-context] / supplement / recovery note
+  -> unblock and rerun original exec
+  -> original exec continues from recorded progress
+  -> original exec done
   -> existing child tasks dispatch
 ```
 
-## Resolve-Block Branch
+Exec block comments should record completed work, remaining work, attempted fixes, artifacts/changed files, `do_not_repeat`, and `resume_hint`. Mochi resume comments should record the decision/context, where to continue, what not to repeat, next steps, and whether root spec changed.
 
-Use a resolve-block branch when the original task should remain blocked as historical fact and workflow must continue through a new path.
+If the original exec is no longer the correct work item, stop and replan. Do not pretend the blocked exec succeeded. Update the root spec, explain the supersession in comments, and create a replacement branch only after deciding how to keep downstream dependencies honest.
 
-Use this when:
+## Review-Blocked Fix Insertion
 
-- goal, scope, acceptance criteria, or scenarios changed;
-- the original task is no longer the correct executable unit;
-- a different task type, assignee, or dependency path is needed;
-- recovery itself should be visible in the project graph.
+A failed review should not be marked done merely to move the graph forward. The review task is the gate.
 
 Flow:
 
 ```text
-blocked exec remains blocked
-  -> resolve-block task records the decision or resolution
-  -> replacement exec/review path continues
+root -> exec -> review
+root -> exec -> review(blocked: needs_fix)
+root -> exec -> fix -> review(unblocked, waiting on fix)
+fix done -> review auto-promotes/reruns
 ```
 
-The resolve-block task should record why the original task remains blocked, what decision was made, and what task should run next.
+Operation order:
 
-## Failed Review / Review Blocked
+1. Review blocks with typed reason `needs_fix` and comments failed scenarios/evidence.
+2. Mochi creates a scoped fix task assigned to exec.
+3. Link the current predecessor to the fix task.
+4. Link the fix task as a parent of the blocked review task.
+5. Unblock the review task. Because the new fix parent is not done, review waits in `todo`.
+6. When fix completes, native dependency promotion reruns the same review task.
 
-A failed review should not be marked done. Preserve it as blocked evidence and continue through a review-specific bridge:
+Fix normally scopes to failed scenarios only. Use an automatic loop cap, typically two fix insertions, before orchestrator triage.
 
-```text
-blocked review remains blocked
-  -> resolve-review-block task records failed scenarios
-  -> fix exec task
-  -> re-review task
-```
-
-The fix task should target only the failed scenarios unless the root specification is explicitly changed. The re-review task should verify the failed scenarios and any regression checks needed for safety.
+See `block-rerun-and-fix-insertion.md` for typed block reasons, comment templates, and multi-round rules.
 
 ## Virtual Office Boundary
 
