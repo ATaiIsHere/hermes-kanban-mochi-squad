@@ -59,6 +59,33 @@ class TestConfigTemplateParsing(unittest.TestCase):
         self.assertFalse(data["virtual_office"]["enabled"])
 
 
+class TestProfileTemplates(unittest.TestCase):
+    """Validate minimal profile SOUL templates exist and route to the skill."""
+
+    def test_profile_templates_exist(self):
+        profiles_dir = TEMPLATES_DIR / "profiles"
+        self.assertTrue((profiles_dir / "README.md").exists())
+        for name in ("mochi-exec", "mochi-review", "mochi-research", "mochi-plan"):
+            soul = profiles_dir / name / "SOUL.md"
+            self.assertTrue(soul.exists(), f"Missing profile template: {soul}")
+
+    def test_core_templates_route_to_mochi_squad(self):
+        profiles_dir = TEMPLATES_DIR / "profiles"
+        for name in ("mochi-exec", "mochi-review"):
+            text = (profiles_dir / name / "SOUL.md").read_text()
+            self.assertIn("mochi-squad", text)
+            self.assertIn("Required guidance", text)
+
+    def test_templates_are_minimal(self):
+        profiles_dir = TEMPLATES_DIR / "profiles"
+        for name in ("mochi-exec", "mochi-review", "mochi-research", "mochi-plan"):
+            text = (profiles_dir / name / "SOUL.md").read_text()
+            self.assertLessEqual(
+                len(text.splitlines()), 45,
+                f"{name} SOUL.md should stay a minimal router, not a full manual",
+            )
+
+
 class TestReadinessOutputShape(unittest.TestCase):
     """Validate that check_readiness.py produces correct JSON shape."""
 

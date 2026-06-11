@@ -137,6 +137,22 @@ Loading this skill should provide workflow knowledge. It should not silently ins
 
 See `references/setup-readiness.md` for the recommended runtime directory, readiness states, and explicit setup command boundaries.
 
+## Profile Templates
+
+Profile templates live under `templates/profiles/<profile>/SOUL.md`. They are intentionally minimal: identity, role boundaries, and a pointer back to this skill and the relevant references.
+
+Core templates:
+
+- `templates/profiles/mochi-exec/SOUL.md`
+- `templates/profiles/mochi-review/SOUL.md`
+
+Optional templates:
+
+- `templates/profiles/mochi-research/SOUL.md`
+- `templates/profiles/mochi-plan/SOUL.md` — optional fallback only; the normal planning path is the conversation orchestrator plus the root task as SSOT.
+
+Do not duplicate long operational rules into profile SOUL files. If a role must follow a rule, route it from `SKILL.md` and keep the detailed rule in `references/*.md`.
+
 ## Virtual Office Boundary
 
 Virtual Office is a future extension. v0.1 only defines the derivation contract: project state and details must be recoverable from the native Kanban graph and handoff records.
@@ -153,6 +169,7 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 - `references/block-rerun-and-fix-insertion.md` — typed block reasons, exec rerun comments, and review fix insertion.
 - `references/pr-handoff-guard-policy.md` — guard-safe PR handoff format for retryable Kanban comments.
 - `references/setup-readiness.md` — package/runtime separation and readiness model.
+- `templates/profiles/` — minimal SOUL templates for core and optional Mochi worker profiles.
 
 ## Common Pitfalls
 
@@ -162,6 +179,7 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 4. Installing services just because the skill was loaded. Runtime installation must be explicit.
 5. Defining Virtual Office API shape too early. v0.1 deliberately defers it.
 6. Using broad personal PATs where a selected-repository GitHub App installation would be safer.
+7. Adding profile templates that become a second manual. Keep SOUL files thin; route detailed behavior through this skill and references.
 
 ## Verification Checklist
 
@@ -172,4 +190,5 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 - [ ] Blocked recovery uses rerun only when the original task remains correct.
 - [ ] Failed review uses fix insertion before the same review gate and scopes fixes to failed scenarios.
 - [ ] Skill docs do not commit local runtime state, secrets, or host-specific paths.
+- [ ] Profile templates exist for core workers and stay minimal.
 - [ ] Virtual Office is described as future work with API/response shape deferred.

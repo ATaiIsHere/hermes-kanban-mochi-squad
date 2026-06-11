@@ -7,11 +7,12 @@
 
 profiles:
   # Names of Hermes profiles used by this Mochi Squad deployment.
-  # These must already exist in the local Hermes profile directory.
-  plan: mochi-plan
+  # These must already exist or be created explicitly from templates/profiles/.
   exec: mochi-exec
   review: mochi-review
+  # Optional workers; enable only if your workflow uses them.
   research: mochi-research
+  plan: mochi-plan
 
 watchers:
   # Optional: periodic Kanban watcher (disabled by default in v0.1).

@@ -20,21 +20,23 @@ skills/mochi-squad/
   SKILL.md
   references/
     orchestrator-guideline.md
+    block-rerun-and-fix-insertion.md
+    pr-handoff-guard-policy.md
     setup-readiness.md
-```
-
-Future package versions may add:
-
-```text
-skills/mochi-squad/
   templates/
     mochi-squad.config.yaml
+    profiles/
+      README.md
+      mochi-exec/SOUL.md
+      mochi-review/SOUL.md
+      mochi-research/SOUL.md      # optional
+      mochi-plan/SOUL.md          # optional fallback
   scripts/
     check_readiness.py
     setup.py
-  references/
-    config.schema.json
 ```
+
+Profile templates are minimal examples. They should define identity and boundaries, then route back to `SKILL.md` and references. They should not become a second copy of the manual.
 
 ## Recommended Runtime Layout
 
@@ -68,10 +70,10 @@ Example config shape:
 
 ```yaml
 profiles:
-  plan: mochi-plan
   exec: mochi-exec
   review: mochi-review
-  research: mochi-research
+  research: mochi-research   # optional
+  plan: mochi-plan           # optional fallback; normal planning is the conversation orchestrator
 
 watchers:
   blocked:

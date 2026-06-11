@@ -9,6 +9,7 @@ Version `0.1.0` is intentionally small: it ships reusable skill documentation an
 - A Hermes skill at `skills/mochi-squad/SKILL.md`.
 - Orchestrator guidance for turning a request into a native Kanban task graph.
 - Setup/readiness guidance for separating reusable skill content from local runtime state.
+- Minimal profile `SOUL.md` templates for `mochi-exec`, `mochi-review`, optional `mochi-research`, and optional fallback `mochi-plan`.
 - A Project convention derived from existing Kanban task links.
 - Blocked recovery patterns for exec rerun and review fix insertion without marking failed work done.
 
@@ -110,6 +111,16 @@ skills/
       setup-readiness.md
     templates/
       mochi-squad.config.yaml
+      profiles/
+        README.md
+        mochi-exec/
+          SOUL.md
+        mochi-review/
+          SOUL.md
+        mochi-research/
+          SOUL.md
+        mochi-plan/
+          SOUL.md
     scripts/
       check_readiness.py
       setup.py
@@ -129,3 +140,5 @@ Future versions may add templates, readiness scripts, tests, and examples while 
 Copy or symlink `skills/mochi-squad` into your Hermes skills directory, then load the `mochi-squad` skill in an agent session.
 
 The skill can be useful even when no local runtime has been installed. Runtime setup, watchers, profiles, or dashboards should be explicit opt-in steps documented separately and verified before use.
+
+Profile templates are examples for explicit installation only. They should not overwrite existing Hermes profiles by default, and the detailed workflow rules remain in `SKILL.md` and `references/*.md` rather than duplicated into SOUL files.
