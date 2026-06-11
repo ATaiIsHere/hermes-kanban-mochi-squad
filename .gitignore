@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Node / frontend experiments
+node_modules/
+dist/
+build/
+
+# Logs and runtime output
+*.log
+logs/
+cache/
+state.json
+state.yaml
+runtime-state.json
+blocked-watchdog-state.json
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.sqlite
+*.sqlite3
+*.db
+
+# Hermes/Mochi local runtime state
+.hermes/
+mochi-squad-runtime/
+mochi-squad/
