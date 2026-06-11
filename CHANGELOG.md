@@ -1,27 +1,22 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses semantic versioning once releases are tagged.
-
-## [0.1.0] - Unreleased
+## 0.1.0
 
 ### Added
 
+- Single-skill repository layout with `SKILL.md` at repo root.
+- `SKILL.md` role router with explicit role/shared reference routing.
+- Role guides for orchestrator, exec, review, and optional/future researcher roles.
+- Shared Project graph, review fix loop, and PR handoff policies.
 - Deterministic setup flow with `--plan`, `--install`, `--verify`, and `--repair`.
 - Core profile bootstrapping/audit for `mochi-exec` and `mochi-review`.
-- Runtime `state.yaml` tracking for profile audits and script checksums.
+- Runtime `state.yaml` tracking for profile audits, script checksums, and cron job IDs.
 - Quiet `blocked-watchdog.py` script for no-agent cron usage.
+- Package validation script and local CI entrypoint (`scripts/ci-local.sh`).
 - User stories and acceptance criteria reference.
-- Initial skill-only Mochi Squad package for Hermes Kanban workflows.
-- Project convention: root task plus descendants, with state derived from the native task graph.
-- Orchestrator guidance for planning, execution, review, and recovery task chains.
-- Setup/readiness guidance that separates reusable skill documentation from local runtime config and state.
-- Blocked recovery guidance using exec rerun/resume-context and review fix insertion before the same review gate.
-- Guard-safe PR handoff policy for retryable Kanban comments.
 
-### Deferred
+### Changed
 
-- Virtual Office server, UI, routes, and API response shapes.
-- Hermes Kanban schema changes, custom task metadata, and dispatcher changes.
-- Automated runtime installers, service restarts, and bundled credentials.
+- Removed nested `skills/mochi-squad/` package layout.
+- Removed core `mochi-plan` and `mochi-research` profile templates.
+- Review profile defaults include terminal and browser for real verification.

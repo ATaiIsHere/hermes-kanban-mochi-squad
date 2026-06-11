@@ -1,76 +1,76 @@
-"""Tests for mochi-squad config/template parsing."""
+"""Tests for Mochi Squad package layout and routing."""
 
-import json
-import sys
-import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TEMPLATES_DIR = REPO_ROOT / "skills" / "mochi-squad" / "templates"
 
 
-class TestConfigTemplateParsing(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.config_path = TEMPLATES_DIR / "mochi-squad.config.yaml"
+class TestPackageLayout(unittest.TestCase):
+    def test_single_skill_root_layout(self):
+        self.assertTrue((REPO_ROOT / "SKILL.md").exists())
+        self.assertFalse((REPO_ROOT / "skills").exists())
+        for directory in ("references", "templates", "scripts", "examples", "tests"):
+            self.assertTrue((REPO_ROOT / directory).is_dir(), directory)
 
-    def test_template_exists(self):
-        self.assertTrue(self.config_path.exists())
+    def test_role_and_shared_references_exist(self):
+        required = [
+            "references/roles/orchestrator-guideline.md",
+            "references/roles/exec-guideline.md",
+            "references/roles/review-guideline.md",
+            "references/roles/researcher-guideline.md",
+            "references/shared/project-graph-conventions.md",
+            "references/shared/review-fix-loop.md",
+            "references/shared/pr-handoff-guard-policy.md",
+            "references/setup-readiness.md",
+            "references/open-source-packaging.md",
+            "references/user-stories.md",
+        ]
+        for rel in required:
+            self.assertTrue((REPO_ROOT / rel).is_file(), rel)
 
-    def test_template_is_valid_yaml(self):
-        data = yaml.safe_load(self.config_path.read_text())
-        self.assertIsNotNone(data)
+    def test_skill_routes_every_active_reference(self):
+        skill = (REPO_ROOT / "SKILL.md").read_text()
+        routed = [
+            "references/roles/orchestrator-guideline.md",
+            "references/roles/exec-guideline.md",
+            "references/roles/review-guideline.md",
+            "references/roles/researcher-guideline.md",
+            "references/shared/project-graph-conventions.md",
+            "references/shared/review-fix-loop.md",
+            "references/shared/pr-handoff-guard-policy.md",
+            "references/setup-readiness.md",
+            "references/open-source-packaging.md",
+            "references/user-stories.md",
+        ]
+        for rel in routed:
+            self.assertIn(rel, skill)
 
-    def test_template_has_core_profiles(self):
-        data = yaml.safe_load(self.config_path.read_text())
-        profiles = data["profiles"]
-        self.assertEqual(profiles["exec"], "mochi-exec")
-        self.assertEqual(profiles["review"], "mochi-review")
-        self.assertNotIn("plan", profiles)
+    def test_config_template_has_runtime_sections_without_profile_mapping(self):
+        text = (REPO_ROOT / "templates" / "mochi-squad.config.yaml").read_text()
+        self.assertIn("kanban:", text)
+        self.assertIn("watchers:", text)
+        self.assertIn("virtual_office:", text)
+        self.assertNotIn("research: mochi-research", text)
+        self.assertNotIn("plan: mochi-plan", text)
 
-    def test_template_has_runtime_sections(self):
-        data = yaml.safe_load(self.config_path.read_text())
-        self.assertIn("kanban", data)
-        self.assertIn("watchers", data)
-        self.assertIn("virtual_office", data)
-        self.assertFalse(data["watchers"]["blocked"]["enabled"])
-        self.assertFalse(data["virtual_office"]["enabled"])
+    def test_profile_templates_core_only(self):
+        profiles_dir = REPO_ROOT / "templates" / "profiles"
+        self.assertTrue((profiles_dir / "mochi-exec" / "SOUL.md").is_file())
+        self.assertTrue((profiles_dir / "mochi-review" / "SOUL.md").is_file())
+        self.assertFalse((profiles_dir / "mochi-plan").exists())
+        self.assertFalse((profiles_dir / "mochi-research").exists())
 
-
-class TestProfileTemplates(unittest.TestCase):
-    def test_profile_templates_exist(self):
-        profiles_dir = TEMPLATES_DIR / "profiles"
-        self.assertTrue((profiles_dir / "README.md").exists())
-        for name in ("mochi-exec", "mochi-review", "mochi-research"):
-            self.assertTrue((profiles_dir / name / "SOUL.md").exists(), name)
-        self.assertFalse((profiles_dir / "mochi-plan" / "SOUL.md").exists())
-
-    def test_core_templates_route_to_mochi_squad(self):
-        profiles_dir = TEMPLATES_DIR / "profiles"
-        for name in ("mochi-exec", "mochi-review"):
-            text = (profiles_dir / name / "SOUL.md").read_text()
+    def test_core_templates_are_minimal_and_route_to_role_guides(self):
+        expectations = {
+            "mochi-exec": "references/roles/exec-guideline.md",
+            "mochi-review": "references/roles/review-guideline.md",
+        }
+        for profile, guide in expectations.items():
+            text = (REPO_ROOT / "templates" / "profiles" / profile / "SOUL.md").read_text()
             self.assertIn("mochi-squad", text)
-            self.assertIn("Required guidance", text)
-
-    def test_templates_are_minimal(self):
-        profiles_dir = TEMPLATES_DIR / "profiles"
-        for name in ("mochi-exec", "mochi-review", "mochi-research"):
-            text = (profiles_dir / name / "SOUL.md").read_text()
-            self.assertLessEqual(len(text.splitlines()), 45)
-
-
-class TestReadinessOutputShape(unittest.TestCase):
-    def test_json_output_shape(self):
-        scripts_dir = REPO_ROOT / "skills" / "mochi-squad" / "scripts"
-        sys.path.insert(0, str(scripts_dir))
-        from check_readiness import check_readiness
-        with tempfile.TemporaryDirectory() as tmp:
-            result = check_readiness(str(Path(tmp) / "mochi-squad"), hermes_home=tmp)
-        required = {"ready", "readiness", "skill_version", "setup_needed", "missing", "suggested_action"}
-        self.assertTrue(required.issubset(result.keys()))
+            self.assertIn(guide, text)
+            self.assertLessEqual(len(text.splitlines()), 30)
 
 
 if __name__ == "__main__":

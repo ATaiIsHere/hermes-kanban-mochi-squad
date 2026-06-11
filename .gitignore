@@ -20,7 +20,9 @@ build/
 logs/
 cache/
 state.json
+state.yaml
 runtime-state.json
+blocked-watchdog-state.json
 
 # Local configuration and secrets
 .env
@@ -36,3 +38,4 @@ runtime-state.json
 # Hermes/Mochi local runtime state
 .hermes/
 mochi-squad-runtime/
+mochi-squad/
