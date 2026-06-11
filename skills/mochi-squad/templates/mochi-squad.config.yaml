@@ -1,26 +1,30 @@
 # Mochi Squad — default local runtime config
 #
-# Copy this template to ${HERMES_HOME}/mochi/mochi-squad/config.yaml
+# Copy this template to ${HERMES_HOME}/mochi-squad/config.yaml
 # and edit for your local deployment.
 #
 # v0.1 — not a committed API contract; shape may change.
 
+kanban:
+  db_path: auto
+
 profiles:
-  # Names of Hermes profiles used by this Mochi Squad deployment.
-  # These must already exist or be created explicitly from templates/profiles/.
+  # Core profiles used by this Mochi Squad deployment.
   exec: mochi-exec
   review: mochi-review
-  # Optional workers; enable only if your workflow uses them.
+  # Optional/future worker; not installed by default unless explicitly enabled.
   research: mochi-research
-  plan: mochi-plan
 
 watchers:
-  # Optional: periodic Kanban watcher (disabled by default in v0.1).
   blocked:
     enabled: false
     schedule: "every 5m"
     notify_target: origin
+    script: scripts/blocked-watchdog.py
 
 virtual_office:
   # Virtual Office is deferred in v0.1.
   enabled: false
+  listen_host: 127.0.0.1
+  port: 3000
+  public_base_url: null

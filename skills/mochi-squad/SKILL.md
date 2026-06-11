@@ -16,7 +16,7 @@ metadata:
 
 Mochi Squad is a skill-only convention layer for Hermes Kanban. It explains how to organize native Kanban tasks into durable project workflows, how an orchestrator should route plan/exec/review work, and how to continue safely when execution or review is blocked.
 
-Version `0.1.0` is documentation-only. It does not run a daemon, expose a server, install a Virtual Office, modify Hermes Kanban schema, or require custom task columns.
+Version `0.1.0` includes workflow documentation plus deterministic setup/readiness scripts. It does not run a daemon, expose a server, install a Virtual Office, modify Hermes Kanban schema, or require custom task columns.
 
 ## When to Use
 
@@ -133,9 +133,7 @@ skill package = reusable docs, templates, schemas, scripts
 runtime install = local config, state, profiles, watchers, services
 ```
 
-Loading this skill should provide workflow knowledge. It should not silently install, repair, restart, or modify the host.
-
-See `references/setup-readiness.md` for the recommended runtime directory, readiness states, and explicit setup command boundaries.
+Loading this skill should provide workflow knowledge. It should not silently install, repair, restart, create cron jobs, or modify the host. Explicit setup uses `setup.py --plan`, `--install`, `--verify`, and `--repair`; see `references/setup-readiness.md`.
 
 ## Profile Templates
 
@@ -148,8 +146,7 @@ Core templates:
 
 Optional templates:
 
-- `templates/profiles/mochi-research/SOUL.md`
-- `templates/profiles/mochi-plan/SOUL.md` — optional fallback only; the normal planning path is the conversation orchestrator plus the root task as SSOT.
+- `templates/profiles/mochi-research/SOUL.md` — optional/future only, not installed by default in core v0.1.
 
 Do not duplicate long operational rules into profile SOUL files. If a role must follow a rule, route it from `SKILL.md` and keep the detailed rule in `references/*.md`.
 
@@ -168,7 +165,8 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 - `references/orchestrator-guideline.md` — project graph, orchestration, exec rerun, and review fix-insertion conventions.
 - `references/block-rerun-and-fix-insertion.md` — typed block reasons, exec rerun comments, and review fix insertion.
 - `references/pr-handoff-guard-policy.md` — guard-safe PR handoff format for retryable Kanban comments.
-- `references/setup-readiness.md` — package/runtime separation and readiness model.
+- `references/setup-readiness.md` — package/runtime separation, explicit setup commands, profile bootstrap/audit, state.yaml, and blocked watcher boundaries.
+- `references/user-stories.md` — v0.1 user stories and acceptance criteria, including setup automation.
 - `templates/profiles/` — minimal SOUL templates for core and optional Mochi worker profiles.
 
 ## Common Pitfalls
@@ -191,4 +189,6 @@ For repository-scoped automation, prefer a GitHub App installation with selected
 - [ ] Failed review uses fix insertion before the same review gate and scopes fixes to failed scenarios.
 - [ ] Skill docs do not commit local runtime state, secrets, or host-specific paths.
 - [ ] Profile templates exist for core workers and stay minimal.
+- [ ] Setup plan/install/verify/repair works in an isolated Hermes home and does not overwrite existing SOUL/config.
+- [ ] Blocked watcher is deterministic and quiet on no-op ticks.
 - [ ] Virtual Office is described as future work with API/response shape deferred.

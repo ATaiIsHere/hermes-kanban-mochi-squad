@@ -1,128 +1,98 @@
 #!/usr/bin/env python3
-"""Mochi Squad readiness checker — side-effect-free, cheap, JSON output.
+"""Mochi Squad readiness checker — side-effect-free JSON output."""
 
-Usage:
-    python check_readiness.py [--runtime-dir PATH]
-
-Checks:
-    - Runtime state.json existence and version compatibility
-    - Config file existence (template fallback)
-    - Recorded profile existence (from state.json)
-    - Virtual Office status
-
-Returns JSON to stdout. Exits 0 on success (any readiness level),
-non-zero on internal error.
-"""
+from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
+from pathlib import Path
+from typing import Any
 
 SKILL_VERSION = "0.1.0"
+CORE_PROFILES = ("mochi-exec", "mochi-review")
 
 
 def default_runtime_dir(hermes_home: str | None = None) -> str:
-    """Return the default Mochi Squad runtime directory path."""
-    base = hermes_home or os.environ.get("HERMES_HOME",
-                                          os.path.expanduser("~/.hermes"))
-    return os.path.join(base, "mochi", "mochi-squad")
+    base = hermes_home or os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+    return str(Path(base).expanduser() / "mochi-squad")
 
 
-def check_readiness(runtime_dir: str) -> dict:
-    """Check runtime readiness without side effects."""
-    result: dict = {
-        "ready": False,
-        "readiness": "skill_available",
+def read_json_yaml(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return {"_parse_error": str(exc)}
+
+
+def check_readiness(runtime_dir: str, hermes_home: str | None = None) -> dict[str, Any]:
+    runtime = Path(runtime_dir).expanduser()
+    home = Path(hermes_home or os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))).expanduser()
+    state_path = runtime / "state.yaml"
+    config_path = runtime / "config.yaml"
+    state = read_json_yaml(state_path)
+
+    checks = {
+        "runtime_dir": runtime.is_dir(),
+        "config_yaml": config_path.is_file(),
+        "state_yaml": state_path.is_file() and not state.get("_parse_error"),
+        "watchdog_script": (runtime / "scripts" / "blocked-watchdog.py").is_file(),
+    }
+    profiles: dict[str, Any] = {}
+    for name in CORE_PROFILES:
+        pdir = home / "profiles" / name
+        profiles[name] = {
+            "exists": pdir.is_dir(),
+            "soul_exists": (pdir / "SOUL.md").is_file(),
+            "config_exists": (pdir / "config.yaml").is_file(),
+            "skill_installed": (pdir / "skills" / "mochi-squad").is_dir(),
+        }
+
+    missing = [name for name, ok in checks.items() if not ok]
+    for name, data in profiles.items():
+        for key, ok in data.items():
+            if not ok:
+                missing.append(f"profiles.{name}.{key}")
+
+    version = state.get("version") if state else None
+    if state and version != SKILL_VERSION:
+        missing.append(f"state.version {version!r} != {SKILL_VERSION!r}")
+
+    ready = not missing
+    readiness = "runtime_ready" if ready else "runtime_not_installed"
+    if not ready and state_path.exists() and config_path.exists():
+        readiness = "runtime_warn"
+
+    return {
+        "ready": ready,
+        "readiness": readiness,
         "skill_version": SKILL_VERSION,
-        "setup_needed": False,
-        "missing": [],
-        "suggested_action": None,
+        "state_version": version,
+        "setup_needed": not ready,
+        "runtime_dir": str(runtime),
+        "hermes_home": str(home),
+        "checks": checks,
+        "profiles_checked": profiles,
+        "missing": missing,
+        "virtual_office": {"enabled": bool(state.get("virtual_office", {}).get("enabled", False)) if state else False, "deferred": True},
+        "suggested_action": None if ready else "run scripts/setup.py --plan, then scripts/setup.py --install or --repair",
     }
-
-    state_path = os.path.join(runtime_dir, "state.json")
-    config_path = os.path.join(runtime_dir, "config.yaml")
-
-    # --- State file ---
-    if os.path.isfile(state_path):
-        try:
-            with open(state_path) as f:
-                state = json.load(f)
-        except (json.JSONDecodeError, OSError) as exc:
-            result["missing"].append(f"state.json unreadable: {exc}")
-            state = {}
-        else:
-            state_version = state.get("version")
-            if state_version:
-                result["state_version"] = state_version
-                if state_version == SKILL_VERSION:
-                    result["readiness"] = "runtime_ready"
-                    result["ready"] = True
-                else:
-                    result["missing"].append(
-                        f"state.json version {state_version} != "
-                        f"skill {SKILL_VERSION}"
-                    )
-            else:
-                result["missing"].append("state.json has no version field")
-    else:
-        result["readiness"] = "runtime_not_installed"
-        result["setup_needed"] = True
-        result["missing"].append("state.json not found")
-        state = {}
-
-    # --- Config file ---
-    if os.path.isfile(config_path):
-        result["config_exists"] = True
-    else:
-        result["config_exists"] = False
-        entry = "config.yaml not found"
-        if entry not in result["missing"]:
-            result["missing"].append(entry)
-
-    # --- Profiles (recorded in state) ---
-    if state:
-        recorded = state.get("profiles", {})
-        found = sum(1 for v in recorded.values() if v.get("exists"))
-        missing_profiles = sum(1 for v in recorded.values() if not v.get("exists"))
-        result["profiles_checked"] = {"found": found, "missing": missing_profiles}
-
-    # --- Virtual Office (from state) ---
-    vo_enabled = False
-    if state:
-        vo = state.get("virtual_office", {})
-        vo_enabled = vo.get("enabled", False)
-    result["virtual_office"] = {
-        "enabled": vo_enabled,
-        "deferred": True,
-    }
-
-    # --- Suggested action ---
-    if result["readiness"] == "runtime_not_installed":
-        result["suggested_action"] = "run scripts/setup.py --install"
-    elif not result["ready"]:
-        result["suggested_action"] = (
-            "run scripts/setup.py --verify --repair"
-        )
-
-    return result
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Mochi Squad readiness checker")
-    parser.add_argument(
-        "--runtime-dir",
-        default=None,
-        help="Mochi Squad runtime directory path "
-             "(default: $HERMES_HOME/mochi/mochi-squad)",
-    )
+    parser.add_argument("--runtime-dir", default=None)
+    parser.add_argument("--hermes-home", default=None)
     args = parser.parse_args()
-    runtime_dir = args.runtime_dir or default_runtime_dir()
-    result = check_readiness(runtime_dir)
-    json.dump(result, sys.stdout, indent=2)
+    home = args.hermes_home or os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+    runtime_dir = args.runtime_dir or default_runtime_dir(home)
+    json.dump(check_readiness(runtime_dir, hermes_home=home), sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

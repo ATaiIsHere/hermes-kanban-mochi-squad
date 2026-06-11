@@ -1,24 +1,25 @@
 # Mochi Squad Setup and Readiness
 
-Status: v0.1 draft for open-source packaging.
+Status: v0.1 setup contract.
 
 ## Purpose
 
-This document separates reusable skill content from local runtime installation state.
+This document separates reusable skill content from local runtime installation state and defines what the deterministic setup scripts own.
 
 ```text
-skill package = reusable docs, templates, schemas, scripts
-runtime install = local config, state, profiles, watchers, services
+skill package = reusable docs, templates, examples, tests, side-effect-aware scripts
+runtime install = local config, state, profiles, watcher script copy, cron wiring, logs/cache
 ```
 
-Loading the skill should give an agent workflow knowledge. It should not silently install dependencies, create profiles, create cron jobs, start services, rewrite config, or repair the host.
+Loading the skill should give an agent workflow knowledge. It should not silently install dependencies, create profiles, create cron jobs, start services, rewrite config, or repair the host. Setup changes happen only through explicit setup commands.
 
-## Recommended Skill Package Layout
+## Skill Package Layout
 
 ```text
 skills/mochi-squad/
   SKILL.md
   references/
+    user-stories.md
     orchestrator-guideline.md
     block-rerun-and-fix-insertion.md
     pr-handoff-guard-policy.md
@@ -29,150 +30,44 @@ skills/mochi-squad/
       README.md
       mochi-exec/SOUL.md
       mochi-review/SOUL.md
-      mochi-research/SOUL.md      # optional
-      mochi-plan/SOUL.md          # optional fallback
+      mochi-research/SOUL.md      # optional/future
   scripts/
+    blocked-watchdog.py
     check_readiness.py
     setup.py
 ```
 
-Profile templates are minimal examples. They should define identity and boundaries, then route back to `SKILL.md` and references. They should not become a second copy of the manual.
+There is no core `mochi-plan` template. Normal planning is owned by the conversation orchestrator and root task SSOT.
 
-## Recommended Runtime Layout
+## Runtime Layout
 
-Runtime files should live outside reusable skill files. A local install may use:
+Runtime files live outside reusable skill files:
 
 ```text
-${HERMES_HOME}/mochi/mochi-squad/
+${HERMES_HOME}/mochi-squad/
   config.yaml
-  state.json
+  state.yaml
+  scripts/
+    blocked-watchdog.py
+  blocked-watchdog-state.json
   logs/
   cache/
 ```
 
 Definitions:
 
-- `config.yaml`: desired local deployment config, usually copied from a template.
-- `state.json`: observed install/runtime state updated by explicit setup, verify, repair, watcher, or service commands.
-- `logs/`: runtime logs for watchers or optional services.
-- `cache/`: disposable readiness or API cache data.
+- `config.yaml`: stable desired local deployment settings copied from a template.
+- `state.yaml`: JSON-compatible YAML recording observed/generated facts from setup/verify/repair/watchers.
+- `scripts/`: copied deterministic scripts used by local runtime or cron jobs.
+- `blocked-watchdog-state.json`: dedupe state for blocked event notifications.
+- `logs/` and `cache/`: disposable runtime data.
 
 Do not store raw secrets, API tokens, OAuth credentials, private keys, personal data, local chat ids, or webhook URLs in committed files. Config may refer to secret locations or environment variable names without including secret values.
 
-## Config vs State
-
-```text
-config = desired state
-state  = observed state
-```
-
-Example config shape:
-
-```yaml
-profiles:
-  exec: mochi-exec
-  review: mochi-review
-  research: mochi-research   # optional
-  plan: mochi-plan           # optional fallback; normal planning is the conversation orchestrator
-
-watchers:
-  blocked:
-    enabled: false
-    schedule: "every 5m"
-    notify_target: origin
-
-virtual_office:
-  enabled: false
-```
-
-Example state shape:
-
-```json
-{
-  "version": "0.1.0",
-  "installed": true,
-  "last_verified_at": "2026-01-01T00:00:00Z",
-  "readiness": "runtime_ready",
-  "blocked_watcher": {
-    "installed": false,
-    "last_status": "not_configured"
-  },
-  "virtual_office": {
-    "installed": false,
-    "reason": "deferred"
-  },
-  "profiles": {
-    "mochi-exec": {"exists": true},
-    "mochi-review": {"exists": true}
-  }
-}
-```
-
-These are examples only. They are not a v0.1 API contract.
-
-## Readiness Levels
-
-A skill can be available while the runtime is missing.
-
-Use these coarse readiness levels:
-
-```text
-skill_available
-  The skill package is readable and can explain the workflow.
-
-runtime_not_installed
-  No runtime marker/state exists, or required install markers are missing.
-
-runtime_ready
-  Runtime state exists and cheap checks indicate configured components are installed.
-```
-
-Optional finer states may include:
-
-```text
-runtime_partial
-runtime_stale
-runtime_broken
-```
-
-## Lightweight Readiness Check
-
-A future `scripts/check_readiness.py` should be cheap and side-effect-free.
-
-It may check:
-
-- whether runtime `state.json` exists;
-- whether state version is compatible with the skill version;
-- whether config exists or can be derived from a template;
-- whether recorded profiles were previously verified;
-- whether Virtual Office is intentionally disabled, missing, or installed.
-
-It should not:
-
-- install dependencies;
-- create profiles;
-- create cron jobs;
-- start, stop, or restart services;
-- rewrite config;
-- run expensive database crawls or long service checks.
-
-Suggested JSON output when runtime state is missing:
-
-```json
-{
-  "ready": false,
-  "readiness": "runtime_not_installed",
-  "setup_needed": true,
-  "missing": ["state.json not found"],
-  "suggested_action": "run scripts/setup.py --install"
-}
-```
-
-## Explicit Setup Commands
-
-Full install, verify, and repair should be explicit operations:
+## Setup Commands
 
 ```bash
+python skills/mochi-squad/scripts/setup.py --plan
 python skills/mochi-squad/scripts/setup.py --install
 python skills/mochi-squad/scripts/setup.py --verify
 python skills/mochi-squad/scripts/setup.py --repair
@@ -180,29 +75,123 @@ python skills/mochi-squad/scripts/setup.py --repair
 
 Expected behavior:
 
-- `--install`: create local runtime config/state and install selected components idempotently.
-- `--verify`: perform complete checks and update observed state.
-- `--repair`: fix missing or broken components where safe, otherwise report required user action.
+- `--plan`: side-effect-free; reports intended file/profile/script changes and warnings.
+- `--install`: creates missing runtime directories, config/state, copied scripts, and missing core profiles idempotently.
+- `--verify`: side-effect-free readiness/doctor check for runtime files, core profiles, worker skill availability, and watcher script presence.
+- `--repair`: conservative missing-file repair; does not overwrite existing SOUL/config files.
 
-All setup operations must be idempotent and safe to re-run. They must not commit generated state back into the reusable skill package.
+Core profiles:
+
+```text
+mochi-exec
+mochi-review
+```
+
+Optional/future profile:
+
+```text
+mochi-research
+```
+
+Newly-created core profiles receive:
+
+- minimal `SOUL.md` from `templates/profiles/<profile>/SOUL.md`;
+- recommended Hermes-native `config.yaml` with `skills: [mochi-squad]` and role-appropriate `enabled_toolsets`;
+- a local copy of the `mochi-squad` skill under the profile skill directory.
+
+Existing profiles are audited and skipped. Setup must not silently overwrite existing SOUL or profile config files.
+
+## Config vs State
+
+```text
+config = desired state
+state  = observed/generated state
+```
+
+Example runtime config shape:
+
+```yaml
+kanban:
+  db_path: auto
+
+profiles:
+  exec: mochi-exec
+  review: mochi-review
+  research: mochi-research  # optional/future
+
+watchers:
+  blocked:
+    enabled: false
+    schedule: "every 5m"
+    notify_target: origin
+    script: scripts/blocked-watchdog.py
+
+virtual_office:
+  enabled: false
+  listen_host: 127.0.0.1
+  port: 3000
+  public_base_url: null
+```
+
+Example state facts:
+
+```json
+{
+  "version": "0.1.0",
+  "installed": true,
+  "last_verified_at": "2026-01-01T00:00:00Z",
+  "profiles": {
+    "mochi-exec": {"status": "ok", "skill_installed": true},
+    "mochi-review": {"status": "ok", "skill_installed": true}
+  },
+  "scripts": {
+    "blocked-watchdog.py": {"installed": true, "sha256": "..."}
+  },
+  "blocked_watcher": {
+    "cron_installed": false,
+    "cron_job_id": null,
+    "dedupe_state_path": "${HERMES_HOME}/mochi-squad/blocked-watchdog-state.json"
+  }
+}
+```
+
+These are examples only. They are not a v0.1 API contract.
+
+## Blocked Watcher Boundary
+
+The package ships `scripts/blocked-watchdog.py` as deterministic logic. It should be run by a Hermes cron with `no_agent=true` after explicit operator setup.
+
+Behavior:
+
+- no new blocked task/event: stdout is empty;
+- new blocked event: stdout contains a concise notification payload;
+- dedupe state is local runtime state, never committed to the package;
+- script errors exit non-zero so broken watchdogs do not fail silently.
+
+`setup.py` copies and checksums the watcher script, but it does not mutate Hermes cron jobs directly. Cron creation, delivery target, and notification permissions remain explicit/operator-approved setup actions.
+
+## Readiness Levels
+
+```text
+skill_available
+  The skill package is readable and can explain the workflow.
+
+runtime_not_installed
+  Required runtime files/profiles are missing.
+
+runtime_warn
+  Runtime exists but optional or repairable pieces are missing/stale.
+
+runtime_ready
+  Runtime state exists and cheap checks indicate configured components are installed.
+```
 
 ## Agent Behavior
 
 When an agent loads this skill:
 
 1. Use the workflow guidance immediately.
-2. If local runtime behavior is required, run or request the lightweight readiness check.
-3. If readiness is `runtime_not_installed`, report that setup is needed.
+2. If local runtime behavior is required, run `check_readiness.py` or `setup.py --verify`.
+3. If readiness is missing/stale, show `setup.py --plan` before mutating files.
 4. Do not auto-install unless the user explicitly asked for setup, install, verify, or repair.
 5. After any explicit setup action, verify results before declaring success.
-
-## Open-Source Packaging Notes
-
-For public-intended repositories:
-
-- avoid user-specific names, local host paths, chat ids, channel ids, domains, and private profile names in committed defaults;
-- use examples like `mochi-exec`, `mochi-review`, `origin`, and `${HERMES_HOME}`;
-- include `.env.example` only when necessary, never real secrets;
-- keep Hermes-native Kanban unmodified;
-- document Mochi Squad as a convention layer over task graphs, comments, and handoffs;
-- use selected-repository GitHub App installation access instead of broad personal PATs when automating repository writes.

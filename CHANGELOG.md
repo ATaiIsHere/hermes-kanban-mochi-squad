@@ -8,6 +8,11 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Added
 
+- Deterministic setup flow with `--plan`, `--install`, `--verify`, and `--repair`.
+- Core profile bootstrapping/audit for `mochi-exec` and `mochi-review`.
+- Runtime `state.yaml` tracking for profile audits and script checksums.
+- Quiet `blocked-watchdog.py` script for no-agent cron usage.
+- User stories and acceptance criteria reference.
 - Initial skill-only Mochi Squad package for Hermes Kanban workflows.
 - Project convention: root task plus descendants, with state derived from the native task graph.
 - Orchestrator guidance for planning, execution, review, and recovery task chains.
