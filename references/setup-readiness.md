@@ -112,7 +112,7 @@ State records generated/changing facts:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "profiles": {"mochi-exec": {"status": "ok"}},
   "scripts": {"blocked-watchdog.py": {"sha256": "..."}},
   "blocked_watcher": {"cron_installed": true, "cron_job_id": "..."}

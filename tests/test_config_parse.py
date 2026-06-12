@@ -54,6 +54,12 @@ class TestPackageLayout(unittest.TestCase):
         self.assertNotIn("research: mochi-research", text)
         self.assertNotIn("plan: mochi-plan", text)
 
+    def test_documented_version_matches_package_version(self):
+        readme = (REPO_ROOT / "README.md").read_text()
+        setup_readiness = (REPO_ROOT / "references" / "setup-readiness.md").read_text()
+        self.assertIn("Version `0.2.0` ships:", readme)
+        self.assertIn('"version": "0.2.0"', setup_readiness)
+
     def test_profile_templates_core_only(self):
         profiles_dir = REPO_ROOT / "templates" / "profiles"
         self.assertTrue((profiles_dir / "mochi-exec" / "SOUL.md").is_file())
