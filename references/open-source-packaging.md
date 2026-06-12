@@ -55,3 +55,14 @@ Before merging or publishing:
 - SKILL.md routes every active role-facing reference;
 - setup is verified in an isolated Hermes home;
 - reviewer confirms no runtime state or credentials are committed.
+
+## Installing a Merged Repository as the Active Skill
+
+When replacing an older local `mochi-squad` skill with the GitHub-canonical version, keep the active skill library unambiguous:
+
+1. Confirm the PR is merged and identify the default branch/head commit.
+2. Move the old active skill directory out of `${HERMES_HOME}/skills/` before cloning the new one. Backups under `${HERMES_HOME}/skills/.archive/` may still be scanned by recursive skill discovery, so store backups outside the skills tree (for example `${HERMES_HOME}/skill-archive/`).
+3. Clone the repository directly into `${HERMES_HOME}/skills/devops/mochi-squad` so `skill_view("mochi-squad")` resolves to the GitHub version.
+4. Set the remote URL to the clean GitHub URL after any token-assisted private clone so credentials are not persisted in `.git/config`.
+5. Run `python scripts/validate_package.py` and the test suite from the cloned skill directory.
+6. Archive superseded Kanban planning/review tasks from the pre-merge workflow before starting new work, so the new project starts from the GitHub-canonical baseline.

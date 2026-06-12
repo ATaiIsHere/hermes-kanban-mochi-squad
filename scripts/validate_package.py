@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
     "SKILL.md",
+    "references/change-spec-format.md",
     "references/roles/orchestrator-guideline.md",
     "references/roles/exec-guideline.md",
     "references/roles/review-guideline.md",
@@ -27,6 +28,7 @@ REQUIRED = [
     "scripts/blocked-watchdog.py",
 ]
 ROUTED = [
+    "references/change-spec-format.md",
     "references/roles/orchestrator-guideline.md",
     "references/roles/exec-guideline.md",
     "references/roles/review-guideline.md",

@@ -7,6 +7,7 @@ Use this role for independent verification. Review is allowed to run real checks
 - `references/shared/project-graph-conventions.md`
 - `references/shared/review-fix-loop.md`
 - `references/shared/pr-handoff-guard-policy.md` when PRs are involved
+- `references/change-spec-format.md` when reviewing a repo change that has a Mochi Change Spec
 
 ## Responsibilities
 
