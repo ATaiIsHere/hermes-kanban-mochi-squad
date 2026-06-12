@@ -2,7 +2,7 @@
 
 Mochi Squad is a single-skill workflow package for modeling project-oriented, multi-agent work on top of native Hermes Kanban.
 
-Version `0.1.0` ships:
+Version `0.2.0` ships:
 
 - `SKILL.md` as the compact role router/index.
 - Role guides under `references/roles/`.
@@ -27,6 +27,7 @@ references/
     project-graph-conventions.md
     review-fix-loop.md
     pr-handoff-guard-policy.md
+  change-spec-format.md
   setup-readiness.md
   open-source-packaging.md
   user-stories.md

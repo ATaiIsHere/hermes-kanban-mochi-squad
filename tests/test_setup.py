@@ -48,6 +48,20 @@ class TestSetupWorkflow(unittest.TestCase):
             state = json.loads((runtime / "state.yaml").read_text())
             self.assertTrue(state["blocked_watcher"]["cron_installed"])
 
+    def test_verify_detects_copied_model_config(self):
+        with tempfile.TemporaryDirectory() as home:
+            Path(home, "config.yaml").write_text(
+                "model:\n"
+                "  provider: openai-codex\n"
+                "  default: gpt-5.5\n"
+                "  base_url: https://chatgpt.com/backend-api/codex\n"
+            )
+            run_json(["--hermes-home", home, "--install"])
+            verify = run_json(["--hermes-home", home, "--verify"])
+            checks = {check["name"]: check for check in verify["checks"]}
+            for profile in ("mochi-exec", "mochi-review"):
+                self.assertTrue(checks[f"profile_model:{profile}"]["ok"])
+
     def test_review_profile_defaults_include_browser(self):
         with tempfile.TemporaryDirectory() as home:
             run_json(["--hermes-home", home, "--install"])
