@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SKILL_VERSION = "0.1.0"
+SKILL_VERSION = "0.2.0"
 CORE_PROFILES = ("mochi-exec", "mochi-review")
 PROFILE_TOOLSETS = {
     "mochi-exec": ["file", "terminal", "kanban", "skills"],
@@ -54,6 +54,41 @@ def now_iso() -> str:
 
 def package_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def read_root_model_config(hermes_home: Path) -> dict[str, Any]:
+    """Read minimal model config from root HERMES_HOME/config.yaml (if present).
+
+    Returns only model-related keys: provider, default, base_url,
+    context_length, fallback_providers. Returns {} if config is missing
+    or unparseable.
+    """
+    root_cfg = hermes_home / "config.yaml"
+    if not root_cfg.is_file():
+        return {}
+    try:
+        import yaml  # try dynamic import for safety
+        cfg = yaml.safe_load(root_cfg.read_text())
+    except ImportError:
+        cfg = read_json_yaml(root_cfg)
+    except Exception:
+        return {}
+    if not isinstance(cfg, dict):
+        return {}
+    model = cfg.get("model", {})
+    if not isinstance(model, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("provider", "default", "base_url", "context_length", "fallback_providers"):
+        val = model.get(key)
+        if val is not None:
+            if key in ("fallback_providers",) and isinstance(val, list):
+                result[key] = list(val)
+            elif isinstance(val, (str, int, float, bool)):
+                result[key] = val
+            elif key == "base_url" and isinstance(val, str) and val.strip():
+                result[key] = val.strip()
+    return result
 
 
 def default_hermes_home(value: str | None = None) -> Path:
@@ -102,12 +137,32 @@ def copy_tree_missing(src: Path, dst: Path) -> bool:
     return True
 
 
-def recommended_profile_config(profile: str) -> str:
-    return """# Mochi Squad recommended Hermes profile config
-# Generated only for newly-created profiles. Existing profile configs are audited, not overwritten.
-
-skills:
-""" + "".join(f"  - {item}\n" for item in PROFILE_SKILLS[profile]) + "\nenabled_toolsets:\n" + "".join(f"  - {tool}\n" for tool in PROFILE_TOOLSETS[profile])
+def recommended_profile_config(profile: str, root_model: dict[str, Any] | None = None) -> str:
+    """Build recommended profile config with minimal model subset from root."""
+    parts = []
+    parts.append("# Mochi Squad recommended Hermes profile config")
+    parts.append("# Generated only for newly-created profiles. Existing profile configs are audited, not overwritten.")
+    parts.append("")
+    if root_model:
+        parts.append("model:")
+        for k, v in root_model.items():
+            if isinstance(v, list):
+                parts.append(f"    {k}:")
+                for item in v:
+                    parts.append(f"      - {item}")
+            elif isinstance(v, bool):
+                parts.append(f"    {k}: {'true' if v else 'false'}")
+            else:
+                parts.append(f"    {k}: {v}")
+        parts.append("")
+    parts.append("skills:")
+    for item in PROFILE_SKILLS[profile]:
+        parts.append(f"  - {item}")
+    parts.append("")
+    parts.append("enabled_toolsets:")
+    for tool in PROFILE_TOOLSETS[profile]:
+        parts.append(f"  - {tool}")
+    return "\n".join(parts) + "\n"
 
 
 def profile_template(profile: str) -> Path:
@@ -291,7 +346,7 @@ def install_cron_job(hermes_home: Path, runtime_dir: Path, deliver: str = "origi
     return {"job_id": jid, "jobs_path": str(jobs_path), "script": str(dst), "created_or_updated": True, "replaced": replaced}
 
 
-def build_plan(hermes_home: Path, runtime_dir: Path, install_cron: bool = False, deliver: str = "origin") -> dict[str, Any]:
+def build_plan(hermes_home: Path, runtime_dir: Path, install_cron: bool = False, deliver: str = "origin", link_env: bool = True) -> dict[str, Any]:
     actions: list[dict[str, str]] = []
     warnings: list[str] = []
     for directory in (runtime_dir, runtime_dir / "logs", runtime_dir / "cache", runtime_dir / "scripts"):
@@ -318,12 +373,16 @@ def build_plan(hermes_home: Path, runtime_dir: Path, install_cron: bool = False,
                 warnings.append(f"{name}: {audit['issues'] + audit['warnings']} proposed={audit['proposed_additions']}")
         if not (pdir / "skills" / "mochi-squad").exists():
             actions.append({"action": "install_profile_skill", "path": str(pdir / "skills" / "mochi-squad")})
+        pev = pdir / ".env"
+        if link_env and (hermes_home / ".env").is_file() and not pev.exists():
+            actions.append({"action": "create_env_symlink", "path": str(pev)})
 
     return {
         "action": "plan",
         "hermes_home": str(hermes_home),
         "runtime_dir": str(runtime_dir),
         "core_profiles": list(CORE_PROFILES),
+        "link_env": link_env,
         "will_change": actions,
         "warnings": warnings,
         "approval_required": [
@@ -337,7 +396,7 @@ def build_plan(hermes_home: Path, runtime_dir: Path, install_cron: bool = False,
     }
 
 
-def install(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = False, deliver: str = "origin") -> dict[str, Any]:
+def install(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = False, deliver: str = "origin", link_env: bool = True, root_model: dict[str, Any] | None = None) -> dict[str, Any]:
     changed: list[str] = []
     skipped: list[str] = []
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -356,6 +415,10 @@ def install(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = Fals
     else:
         shutil.copy2(watcher_src, watcher_dst); changed.append("copied scripts/blocked-watchdog.py")
 
+    # Read root model config if not provided
+    if root_model is None:
+        root_model = read_root_model_config(hermes_home)
+
     profile_audits: dict[str, Any] = {}
     for name in CORE_PROFILES:
         pdir = profile_dir(hermes_home, name)
@@ -369,12 +432,26 @@ def install(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = Fals
         else: skipped.append(f"{name}/SOUL.md missing; existing profile not modified")
         pcfg = pdir / "config.yaml"
         if not existed:
-            pcfg.write_text(recommended_profile_config(name)); changed.append(f"wrote {name}/config.yaml")
+            pcfg.write_text(recommended_profile_config(name, root_model=root_model)); changed.append(f"wrote {name}/config.yaml")
         elif pcfg.exists(): skipped.append(f"{name}/config.yaml exists")
         else: skipped.append(f"{name}/config.yaml missing; existing profile not modified")
         skill_dst = pdir / "skills" / "mochi-squad"
         if copy_tree_missing(package_root(), skill_dst): changed.append(f"installed mochi-squad skill for {name}")
         else: skipped.append(f"{name}/skills/mochi-squad exists")
+        # .env symlink
+        pev = pdir / ".env"
+        root_env = hermes_home / ".env"
+        if link_env and root_env.is_file():
+            if pev.exists():
+                skipped.append(f"{name}/.env exists")
+            else:
+                pev.symlink_to(root_env)
+                changed.append(f"created {name}/.env symlink to {root_env}")
+        else:
+            if not link_env:
+                skipped.append(f"{name}/.env symlink disabled (--no-link-env)")
+            elif not root_env.is_file():
+                skipped.append(f"{name}/.env not created (root .env does not exist)")
         profile_audits[name] = audit_profile(hermes_home, name)
 
     cron_result = None
@@ -403,7 +480,21 @@ def install(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = Fals
     })
     write_json_yaml(state_path(runtime_dir), st)
     changed.append("updated state.yaml")
-    return {"action": "install", "changed": changed, "skipped": skipped, "state_path": str(state_path(runtime_dir)), "cron": cron_result}
+
+    # Post-install static verify
+    verify_result = verify(hermes_home, runtime_dir)
+    out = {
+        "action": "install",
+        "changed": changed,
+        "skipped": skipped,
+        "state_path": str(state_path(runtime_dir)),
+        "cron": cron_result,
+        "verify": verify_result,
+    }
+    failed_checks = [c for c in verify_result["checks"] if not c["ok"] and c["severity"] == "fail"]
+    if failed_checks:
+        out["warning"] = f"post-install verify found {len(failed_checks)} failures: {[c['name'] for c in failed_checks]}"
+    return out
 
 
 def verify(hermes_home: Path, runtime_dir: Path) -> dict[str, Any]:
@@ -422,6 +513,33 @@ def verify(hermes_home: Path, runtime_dir: Path) -> dict[str, Any]:
     profiles = {name: audit_profile(hermes_home, name) for name in CORE_PROFILES}
     for name, audit in profiles.items():
         add(f"profile:{name}", audit["status"] == "ok", "fail" if audit["issues"] else "warn", audit)
+    # Profile model/env/provider checks
+    for name in CORE_PROFILES:
+        pdir = profile_dir(hermes_home, name)
+        pcfg = pdir / "config.yaml"
+        if pcfg.is_file():
+            cfg_text = pcfg.read_text(errors="ignore")
+            has_provider = "model.provider" in cfg_text or "\n  provider:" in cfg_text
+            has_default = "model.default" in cfg_text or "\n  default:" in cfg_text
+            add(f"profile_model:{name}", has_provider and has_default, "info",
+                f"provider={has_provider}, default={has_default}")
+        pev = pdir / ".env"
+        if pev.exists():
+            if pev.is_symlink():
+                target_ok = pev.resolve().is_file()
+                add(f"profile_env_symlink:{name}", target_ok, "warn" if not target_ok else "info",
+                    f"symlink to {pev.resolve()}, target_exists={target_ok}")
+            else:
+                add(f"profile_env:{name}", True, "info", "file exists (not a symlink)")
+        else:
+            add(f"profile_env:{name}", False, "info", "missing .env file")
+    # Infer provider env key presence (at least OpenRouter)
+    provider_env_keys = {"openrouter": "OPENROUTER_API_KEY", "openai": "OPENAI_API_KEY",
+                         "anthropic": "ANTHROPIC_API_KEY"}
+    for provider_key, env_var in provider_env_keys.items():
+        val = os.environ.get(env_var, "")
+        add(f"env:{env_var}", bool(val), "info",
+            f"{'set' if val else 'not set'}")
     cron = None
     jobs_path = cron_jobs_path(hermes_home)
     if jobs_path.exists():
@@ -431,12 +549,18 @@ def verify(hermes_home: Path, runtime_dir: Path) -> dict[str, Any]:
         except Exception as exc:
             cron = {"error": str(exc)}
     add("cron_job", cron is not None, "warn", cron or "not installed")
+    # Cron readiness check
+    if cron is not None and isinstance(cron, dict) and cron.get("enabled"):
+        add("cron_enabled", True, "info", "watchdog cron is enabled")
+    else:
+        add("cron_enabled", bool(cron and cron.get("enabled")), "info",
+            cron.get("enabled", False) if cron else "cron not installed")
     failed = [c for c in checks if not c["ok"] and c["severity"] == "fail"]
     warned = [c for c in checks if not c["ok"] and c["severity"] == "warn"]
     return {
         "action": "verify",
         "ready": not failed,
-        "readiness": "runtime_ready" if not failed and not warned else ("runtime_warn" if not failed else "runtime_not_installed"),
+        "readiness": "runtime_ready" if not failed and not warned else (str(len(warned)) + " warnings" if not failed else "runtime_not_installed"),
         "hermes_home": str(hermes_home),
         "runtime_dir": str(runtime_dir),
         "checks": checks,
@@ -446,11 +570,46 @@ def verify(hermes_home: Path, runtime_dir: Path) -> dict[str, Any]:
     }
 
 
-def repair(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = False, deliver: str = "origin") -> dict[str, Any]:
-    out = install(hermes_home, runtime_dir, install_cron_flag=install_cron_flag, deliver=deliver)
+def repair(hermes_home: Path, runtime_dir: Path, install_cron_flag: bool = False, deliver: str = "origin", link_env: bool = True, root_model: dict[str, Any] | None = None) -> dict[str, Any]:
+    out = install(hermes_home, runtime_dir, install_cron_flag=install_cron_flag, deliver=deliver, link_env=link_env, root_model=root_model)
     out["action"] = "repair"
     out["note"] = "Conservative repair creates missing generated files/profiles and never overwrites existing SOUL/config files."
     return out
+
+
+def live_smoke(hermes_home: Path, runtime_dir: Path) -> dict[str, Any]:
+    """Run minimal Hermes smoke prompts for core profiles.
+
+    Opt-in to avoid token spend in normal verify. Requires `hermes` CLI
+    on PATH and credentials configured.
+    """
+    import subprocess as sp_subprocess
+    results: dict[str, Any] = {}
+    for name in CORE_PROFILES:
+        try:
+            # Use a minimal smoke prompt that should return quickly
+            r = sp_subprocess.run(
+                ["hermes", "-p", name, "chat", "-q", "Health check: reply only OK, do not use tools.", "--quiet"],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, "HERMES_HOME": str(hermes_home)},
+            )
+            ok = r.returncode == 0 and "OK" in r.stdout
+            results[name] = {
+                "ok": ok,
+                "returncode": r.returncode,
+                "stdout_preview": r.stdout[:200] if r.stdout else "",
+                "stderr": r.stderr[:200] if r.stderr else "",
+            }
+        except FileNotFoundError:
+            results[name] = {"ok": False, "error": "hermes CLI not found on PATH"}
+        except Exception as exc:
+            results[name] = {"ok": False, "error": str(exc)}
+    all_ok = all(r.get("ok", False) for r in results.values())
+    return {
+        "action": "live_smoke",
+        "ready": all_ok,
+        "profiles": results,
+    }
 
 
 def main() -> int:
@@ -458,23 +617,29 @@ def main() -> int:
     parser.add_argument("--hermes-home", default=None)
     parser.add_argument("--runtime-dir", default=None)
     parser.add_argument("--install-cron", action="store_true", help="Explicitly create/update no-agent blocked watcher cron job")
+    parser.add_argument("--no-link-env", action="store_true", help="Disable creating profile .env symlinks to root .env")
+    parser.add_argument("--live-smoke", action="store_true", help="Run live Hermes smoke prompts during verify (opt-in, costs tokens)")
     parser.add_argument("--deliver", default="origin", help="Cron delivery target when --install-cron is used")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--plan", action="store_true")
-    mode.add_argument("--install", action="store_true")
+    mode.add_argument("--install", action="store_true", help="Idempotent ensure mode: creates missing pieces, runs post-install verify")
     mode.add_argument("--verify", action="store_true")
-    mode.add_argument("--repair", action="store_true")
+    mode.add_argument("--repair", action="store_true", help="Alias for --install (backward compatibility); docs guide to --install as the normal idempotent path")
     args = parser.parse_args()
     hermes_home = default_hermes_home(args.hermes_home)
     runtime_dir = Path(args.runtime_dir).expanduser().resolve() if args.runtime_dir else default_runtime_dir(hermes_home)
+    link_env = not args.no_link_env
+    root_model = read_root_model_config(hermes_home)
     if args.plan:
-        out = build_plan(hermes_home, runtime_dir, install_cron=args.install_cron, deliver=args.deliver)
+        out = build_plan(hermes_home, runtime_dir, install_cron=args.install_cron, deliver=args.deliver, link_env=link_env)
     elif args.install:
-        out = install(hermes_home, runtime_dir, install_cron_flag=args.install_cron, deliver=args.deliver)
+        out = install(hermes_home, runtime_dir, install_cron_flag=args.install_cron, deliver=args.deliver, link_env=link_env, root_model=root_model)
     elif args.verify:
         out = verify(hermes_home, runtime_dir)
+        if args.live_smoke:
+            out["live_smoke"] = live_smoke(hermes_home, runtime_dir)
     elif args.repair:
-        out = repair(hermes_home, runtime_dir, install_cron_flag=args.install_cron, deliver=args.deliver)
+        out = repair(hermes_home, runtime_dir, install_cron_flag=args.install_cron, deliver=args.deliver, link_env=link_env, root_model=root_model)
     else:
         parser.print_help(); return 1
     json.dump(out, sys.stdout, indent=2, sort_keys=True)

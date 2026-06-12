@@ -64,6 +64,28 @@ mochi-review: file, terminal, browser, kanban, skills
 
 Review uses terminal/browser for verification, not implementation.
 
+### Profile Dispatch Smoke Test
+
+`setup.py --install` proves the files exist; it does not by itself prove a worker profile can spawn with a usable model/provider credential set in every deployment. After setup, verify the runtime path and the real Hermes profiles separately:
+
+```bash
+hermes profile list
+hermes -p mochi-exec config path
+hermes -p mochi-review config path
+hermes -p mochi-exec chat -q 'Health check: reply only OK, do not use tools.' --quiet
+hermes -p mochi-review chat -q 'Health check: reply only OK, do not use tools.' --quiet
+```
+
+If a newly-created profile reports that no provider/API key is configured, add the deployment's intended `model.provider` / `model.default` to that profile config and intentionally share credentials only through the deployment-approved mechanism (for example, a profile-local `.env` symlink to the shared Hermes `.env` when that is the local convention). Do not assume child profiles inherit the default profile's provider settings.
+
+### Cron Watchdog Verification
+
+When `--install-cron` is used, verify both the generated runtime state and the scheduler-visible job:
+
+- readiness should report `runtime_ready` and no missing checks;
+- the cron job should be enabled, `no_agent=true`, using `mochi-squad-blocked-watchdog.py`;
+- trigger one run and confirm `last_status=ok`; quiet stdout is expected when there are no new blocked tasks.
+
 ## Config vs State
 
 Config records stable intent:

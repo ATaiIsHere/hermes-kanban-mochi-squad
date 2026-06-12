@@ -40,7 +40,7 @@ class TestReadinessChecker(unittest.TestCase):
         result = check_readiness(self.runtime, hermes_home=self.home)
         self.assertTrue(result["ready"])
         self.assertEqual(result["readiness"], "runtime_ready")
-        self.assertEqual(result["skill_version"], "0.1.0")
+        self.assertEqual(result["skill_version"], "0.2.0")
         self.assertIsNotNone(result["cron"])
 
     def test_cli_json_output(self):

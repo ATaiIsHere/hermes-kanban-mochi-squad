@@ -7,6 +7,7 @@ Use this role for implementation tasks. Exec workers change files, run commands,
 - `references/shared/project-graph-conventions.md`
 - `references/shared/review-fix-loop.md` when resuming after a block or handling fix tasks
 - `references/shared/pr-handoff-guard-policy.md` when opening/updating a PR
+- `references/change-spec-format.md` when implementing a repo change that has a Mochi Change Spec
 
 ## Responsibilities
 

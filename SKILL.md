@@ -1,7 +1,7 @@
 ---
 name: mochi-squad
 description: Role-routed workflow package for project-oriented multi-agent work on top of native Hermes Kanban.
-version: 0.1.0
+version: 0.2.0
 author: Mochi Squad contributors
 license: MIT
 metadata:
@@ -28,6 +28,7 @@ research / spike worker               -> references/roles/researcher-guideline.m
 Shared references are loaded only when relevant:
 
 ```text
+Change spec format (repo/workflow changes) -> references/change-spec-format.md
 Project graph / status derivation -> references/shared/project-graph-conventions.md
 Review needs_fix / rerun loops    -> references/shared/review-fix-loop.md
 Retryable PR handoff              -> references/shared/pr-handoff-guard-policy.md
