@@ -43,6 +43,15 @@ class TestReadinessChecker(unittest.TestCase):
         self.assertEqual(result["skill_version"], "0.2.0")
         self.assertIsNotNone(result["cron"])
 
+    def test_info_only_checks_do_not_require_setup(self):
+        subprocess.run([sys.executable, str(SCRIPTS_DIR / "setup.py"), "--hermes-home", self.home, "--install", "--install-cron"], check=True, capture_output=True, text=True)
+        result = check_readiness(self.runtime, hermes_home=self.home)
+        self.assertTrue(result["ready"])
+        self.assertFalse(result["setup_needed"])
+        self.assertNotIn("env:OPENROUTER_API_KEY", result["missing"])
+        self.assertNotIn("env:OPENAI_API_KEY", result["missing"])
+        self.assertNotIn("env:ANTHROPIC_API_KEY", result["missing"])
+
     def test_cli_json_output(self):
         result = subprocess.run([sys.executable, str(SCRIPTS_DIR / "check_readiness.py"), "--hermes-home", self.home], capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0)

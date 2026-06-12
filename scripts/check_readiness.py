@@ -20,18 +20,18 @@ def check_readiness(runtime_dir: str | None = None, hermes_home: str | None = No
     home = default_hermes_home(hermes_home)
     runtime = Path(runtime_dir).expanduser().resolve() if runtime_dir else default_runtime_dir(home)
     result = verify(home, runtime)
-    failures = []
+    actionable_missing = []
     for check in result["checks"]:
-        if not check["ok"]:
-            failures.append(check["name"])
+        if not check["ok"] and check.get("severity") in {"fail", "warn"}:
+            actionable_missing.append(check["name"])
     return {
         "ready": result["ready"] and result["readiness"] == "runtime_ready",
         "readiness": result["readiness"],
         "skill_version": SKILL_VERSION,
-        "setup_needed": bool(failures),
+        "setup_needed": bool(actionable_missing),
         "runtime_dir": str(runtime),
         "hermes_home": str(home),
-        "missing": failures,
+        "missing": actionable_missing,
         "checks": result["checks"],
         "profiles_checked": result["profiles"],
         "cron": result["cron"],
