@@ -1,5 +1,6 @@
 """Tests for deterministic Mochi Squad setup."""
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -9,6 +10,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SETUP = REPO_ROOT / "scripts" / "setup.py"
+SETUP_SPEC = importlib.util.spec_from_file_location("mochi_setup", SETUP)
+assert SETUP_SPEC is not None and SETUP_SPEC.loader is not None
+mochi_setup = importlib.util.module_from_spec(SETUP_SPEC)
+SETUP_SPEC.loader.exec_module(mochi_setup)
 
 
 def run_json(args):
@@ -47,6 +52,27 @@ class TestSetupWorkflow(unittest.TestCase):
             self.assertFalse((Path(home) / "profiles" / "mochi-research").exists())
             state = json.loads((runtime / "state.yaml").read_text())
             self.assertTrue(state["blocked_watcher"]["cron_installed"])
+
+    def test_dependency_free_model_config_parser(self):
+        parsed = mochi_setup.parse_root_model_config_text(
+            "agent:\n"
+            "  max_turns: 90\n"
+            "model:\n"
+            "  provider: openai-codex\n"
+            "  default: \"gpt-5.5\"\n"
+            "  base_url: https://chatgpt.com/backend-api/codex\n"
+            "  context_length: 200000\n"
+            "  fallback_providers:\n"
+            "    - openrouter\n"
+            "    - anthropic\n"
+            "skills:\n"
+            "  - unrelated\n"
+        )
+        self.assertEqual(parsed["provider"], "openai-codex")
+        self.assertEqual(parsed["default"], "gpt-5.5")
+        self.assertEqual(parsed["base_url"], "https://chatgpt.com/backend-api/codex")
+        self.assertEqual(parsed["context_length"], "200000")
+        self.assertEqual(parsed["fallback_providers"], ["openrouter", "anthropic"])
 
     def test_verify_detects_copied_model_config(self):
         with tempfile.TemporaryDirectory() as home:
