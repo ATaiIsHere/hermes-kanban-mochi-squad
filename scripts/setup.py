@@ -56,6 +56,63 @@ def package_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def parse_root_model_config_text(text: str) -> dict[str, Any]:
+    """Dependency-free parser for the small root model config subset we copy.
+
+    PyYAML is optional in some Hermes deployments, but setup still needs to copy
+    simple ``model:`` values from the root config into newly-created worker
+    profiles. This intentionally supports only the YAML shapes setup writes or
+    needs to preserve: scalar keys plus a simple list for fallback_providers.
+    """
+    allowed = {"provider", "default", "base_url", "context_length", "fallback_providers"}
+    result: dict[str, Any] = {}
+    in_model = False
+    current_list: str | None = None
+
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if "#" in stripped:
+            stripped = stripped.split("#", 1)[0].rstrip()
+            if not stripped:
+                continue
+
+        if not raw.startswith(" ") and stripped.endswith(":"):
+            in_model = stripped[:-1] == "model"
+            current_list = None
+            continue
+        if not in_model:
+            continue
+        if not raw.startswith(" "):
+            in_model = False
+            current_list = None
+            continue
+
+        if current_list and stripped.startswith("-"):
+            value = stripped[1:].strip().strip('"\'')
+            if value:
+                result.setdefault(current_list, []).append(value)
+            continue
+
+        if ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        current_list = None
+        if key not in allowed:
+            continue
+        if key == "fallback_providers" and not value:
+            result[key] = []
+            current_list = key
+            continue
+        if value:
+            result[key] = value.strip('"\'')
+
+    return result
+
+
 def read_root_model_config(hermes_home: Path) -> dict[str, Any]:
     """Read minimal model config from root HERMES_HOME/config.yaml (if present).
 
@@ -66,11 +123,12 @@ def read_root_model_config(hermes_home: Path) -> dict[str, Any]:
     root_cfg = hermes_home / "config.yaml"
     if not root_cfg.is_file():
         return {}
+    text = root_cfg.read_text()
     try:
-        import yaml  # try dynamic import for safety
-        cfg = yaml.safe_load(root_cfg.read_text())
+        import yaml  # type: ignore[import-not-found]
+        cfg = yaml.safe_load(text)
     except ImportError:
-        cfg = read_json_yaml(root_cfg)
+        return parse_root_model_config_text(text)
     except Exception:
         return {}
     if not isinstance(cfg, dict):
@@ -86,8 +144,6 @@ def read_root_model_config(hermes_home: Path) -> dict[str, Any]:
                 result[key] = list(val)
             elif isinstance(val, (str, int, float, bool)):
                 result[key] = val
-            elif key == "base_url" and isinstance(val, str) and val.strip():
-                result[key] = val.strip()
     return result
 
 
